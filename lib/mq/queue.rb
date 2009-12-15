@@ -113,7 +113,7 @@ class MQ
       @mq.callback{
         @mq.send Protocol::Queue::Bind.new({ :queue => name,
                                              :exchange => exchange,
-                                             :routing_key => opts.delete(:key),
+                                             :routing_key => opts[:key],
                                              :nowait => true }.merge(opts))
       }
       self
@@ -140,7 +140,7 @@ class MQ
       @mq.callback{
         @mq.send Protocol::Queue::Unbind.new({ :queue => name,
                                                :exchange => exchange,
-                                               :routing_key => opts.delete(:key),
+                                               :routing_key => opts[:key],
                                                :nowait => true }.merge(opts))
       }
       self
@@ -172,6 +172,16 @@ class MQ
                                                :nowait => true }.merge(opts))
       }
       @mq.queues.delete @name
+      nil
+    end
+
+    # Purge all messages from the queue.
+    #
+    def purge opts = {}
+      @mq.callback{
+        @mq.send Protocol::Queue::Purge.new({ :queue => name,
+                                              :nowait => true }.merge(opts))
+      }
       nil
     end
 
@@ -240,7 +250,7 @@ class MQ
           q.push(self)
           @mq.send Protocol::Basic::Get.new({ :queue => name,
                                               :consumer_tag => name,
-                                              :no_ack => !opts.delete(:ack),
+                                              :no_ack => !opts[:ack],
                                               :nowait => true }.merge(opts))
         }
       }
@@ -308,7 +318,7 @@ class MQ
       @mq.callback{
         @mq.send Protocol::Basic::Consume.new({ :queue => name,
                                                 :consumer_tag => @consumer_tag,
-                                                :no_ack => !opts.delete(:ack),
+                                                :no_ack => !opts[:ack],
                                                 :nowait => true }.merge(opts))
       }
       self
@@ -336,7 +346,6 @@ class MQ
     # method it will raise a channel or connection exception.
     #
     def unsubscribe opts = {}, &blk
-      @on_msg = nil
       @on_cancel = blk
       @mq.callback{
         @mq.send Protocol::Basic::Cancel.new({ :consumer_tag => @consumer_tag }.merge(opts))
@@ -391,7 +400,7 @@ class MQ
       self
     end
 
-    def recieve_status declare_ok
+    def receive_status declare_ok
       if @on_status
         m, c = declare_ok.message_count, declare_ok.consumer_count
         @on_status.call *(@on_status.arity == 1 ? [m] : [m, c])
