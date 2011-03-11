@@ -1,10 +1,12 @@
-require 'amqp/spec'
-require 'amqp/buffer'
-require 'amqp/protocol'
+# encoding: utf-8
+
+require "amqp/spec"
+require "amqp/buffer"
+require "amqp/protocol"
 
 module AMQP
   class Frame #:nodoc: all
-    def initialize payload = nil, channel = 0
+    def initialize(payload = nil, channel = 0)
       @channel, @payload = channel, payload
     end
     attr_accessor :channel, :payload
@@ -12,7 +14,7 @@ module AMQP
     def id
       self.class::ID
     end
-    
+
     def to_binary
       buf = Buffer.new
       buf.write :octet, id
@@ -32,11 +34,11 @@ module AMQP
         eql and __send__(field) == frame.__send__(field)
       end
     end
-    
+
     class Invalid < StandardError; end
-    
+
     class Method
-      def initialize payload = nil, channel = 0
+      def initialize(payload = nil, channel = 0)
         super
         unless @payload.is_a? Protocol::Class::Method or @payload.nil?
           @payload = Protocol.parse(@payload)
@@ -45,7 +47,7 @@ module AMQP
     end
 
     class Header
-      def initialize payload = nil, channel = 0
+      def initialize(payload = nil, channel = 0)
         super
         unless @payload.is_a? Protocol::Header or @payload.nil?
           @payload = Protocol::Header.new(@payload)
@@ -61,64 +63,6 @@ module AMQP
         id, channel, payload, footer = buf.read(:octet, :short, :longstr, :octet)
         Frame.types[id].new(payload, channel) if footer == FOOTER
       end
-    end
-  end
-end
-
-if $0 =~ /bacon/ or $0 == __FILE__
-  require 'bacon'
-  include AMQP
-
-  describe Frame do
-    should 'handle basic frame types' do
-      Frame::Method.new.id.should == 1
-      Frame::Header.new.id.should == 2
-      Frame::Body.new.id.should == 3
-    end
-
-    should 'convert method frames to binary' do
-      meth = Protocol::Connection::Secure.new :challenge => 'secret'
-
-      frame = Frame::Method.new(meth)
-      frame.to_binary.should.be.kind_of? Buffer
-      frame.to_s.should == [ 1, 0, meth.to_s.length, meth.to_s, 206 ].pack('CnNa*C')
-    end
-
-    should 'convert binary to method frames' do
-      orig = Frame::Method.new Protocol::Connection::Secure.new(:challenge => 'secret')
-
-      copy = Frame.parse(orig.to_binary)
-      copy.should == orig
-    end
-
-    should 'ignore partial frames until ready' do
-      frame = Frame::Method.new Protocol::Connection::Secure.new(:challenge => 'secret')
-      data = frame.to_s
-
-      buf = Buffer.new
-      Frame.parse(buf).should == nil
-      
-      buf << data[0..5]
-      Frame.parse(buf).should == nil
-      
-      buf << data[6..-1]
-      Frame.parse(buf).should == frame
-      
-      Frame.parse(buf).should == nil
-    end
-
-    should 'convert header frames to binary' do
-      head = Protocol::Header.new(Protocol::Basic, :priority => 1)
-      
-      frame = Frame::Header.new(head)
-      frame.to_s.should == [ 2, 0, head.to_s.length, head.to_s, 206 ].pack('CnNa*C')
-    end
-
-    should 'convert binary to header frame' do
-      orig = Frame::Header.new Protocol::Header.new(Protocol::Basic, :priority => 1)
-      
-      copy = Frame.parse(orig.to_binary)
-      copy.should == orig
     end
   end
 end
